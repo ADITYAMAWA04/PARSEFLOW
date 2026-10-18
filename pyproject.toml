@@ -1,0 +1,30 @@
+[project]
+name = "parseflow"
+version = "0.2.0"
+description = "Evidence-preserving document intelligence: PDF/image to Markdown + Digital Twin JSON"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.115",
+    "python-multipart>=0.0.9",
+    "pymupdf>=1.24,<1.27",
+    "pytesseract>=0.3.10",
+    "pillow>=10",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "httpx>=0.27",
+    "python-docx>=1.1",
+    "python-pptx>=1.0",
+    "openpyxl>=3.1",
+    "markdown>=3.5",
+    "charset-normalizer>=3.0",
+]
+
+[project.optional-dependencies]
+server = ["uvicorn[standard]>=0.30"]
+dev = ["pytest>=8", "reportlab>=4"]
+
+[tool.vercel]
+entrypoint = "backend.app:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

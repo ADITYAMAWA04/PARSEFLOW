@@ -1,0 +1,30 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: System packages
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr texlive-latex-base texlive-latex-extra texlive-fonts-recommended
+      - name: Python packages
+        run: pip install -r requirements-dev.txt
+      - name: Unit / integration tests
+        run: python -m pytest -q
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+      - run: pip install -r requirements.txt
+      - name: Official olmOCR-Bench scorer
+        run: |
+          git clone --depth 1 https://github.com/allenai/olmocr.git ../olmocr
+          pip install -e "../olmocr[bench]"
+          playwright install --with-deps chromium
+      - name: Sample-set regression check
+        run: python bench/regression_check.py --olmocr ../olmocr
