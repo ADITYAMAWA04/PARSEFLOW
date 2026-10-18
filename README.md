@@ -8,8 +8,10 @@ questions about the document with citations to those blocks.
 
 > **Status of the olmOCR-Bench target.** ParseFlow has two page engines:
 >
-> * `parseflow` (offline, CPU, no keys): **78.8 %** (v0.7.0; 69.7 % at v0.6) on the official 20-PDF *sample* set with AllenAI's
->   unmodified scorer (from 34.3 %), median 0.44 s/page. Not measured on the full benchmark.
+> * `parseflow` (offline, CPU, no keys): **84.8 %** (84/99, v0.9.0; 78.8 % at v0.7.0) on the official 20-PDF
+>   *sample* set with AllenAI's unmodified scorer (from 34.3 %), median 0.23 s/page with one worker on a
+>   2-vCPU machine. The sample was used during development, so it overstates the full benchmark, which
+>   has not been measured here.
 > * `vlm`: pages are read by a document OCR model, by default **AllenAI olmOCR-2-7B** (82.4 % on the
 >   public leaderboard), through any OpenAI-compatible API, with ParseFlow's pipeline as the per-page
 >   fallback. The request is byte-identical to AllenAI's own pipeline. **Its full-benchmark score has
@@ -102,6 +104,15 @@ in. No email is needed.
 Passwords are stored as salted scrypt hashes, and repeated wrong passwords are slowed down. To run
 ParseFlow on a cloud server with a persistent disk (Render blueprint and Dockerfile included), see
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Your document library
+
+**My documents** (top bar, or the account menu) lists everything you converted: search by name (press
+`/`), sort, and filter by Starred, Needs a look (under 75 % confirmed) or Shared. Select a document to
+see its first page and summary, then open it, download its Markdown or JSON, copy the text, star,
+rename, delete it, or create a read-only share link (accounts only; switch it off any time and the
+link stops working). **Settings** has light/dark appearance, the AI connection and password change;
+**Privacy & data** downloads everything as one ZIP, deletes all documents, or deletes the account.
 
 ## Convert a folder of PDFs to Markdown (no server, no keys)
 
@@ -250,3 +261,13 @@ More: [docs/AUDIT.md](docs/AUDIT.md) (original problems), [docs/RESULTS.md](docs
 ---
 
 Repository: https://github.com/ADITYAMAWA04/PARSERFLOW
+
+## Acknowledgements
+
+Several v0.9.0 improvements were made after comparing ParseFlow with
+[Lekisha02/parseflow_02](https://github.com/Lekisha02/parseflow_02) by Lekisha: the landing page layout
+(upload card with "continue without an account / log in to save", format chips, feature strip),
+the document library (sidebar, document table, details panel with downloads, rename and delete),
+PostgreSQL as the cloud database, and the sample tests her parser passed (document-control footers,
+several headings over one table). The code in this repository was written separately.
+

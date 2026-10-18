@@ -7,7 +7,7 @@ unmodified scorer, and what the result does and does not mean.
 
 | engine | what reads the pages | needs | measured |
 |---|---|---|---|
-| `parseflow` | ParseFlow's own pipeline: PDF text layer, tables, LaTeX from glyphs, Tesseract OCR | nothing (offline, CPU) | 78.8 % on the 20-PDF sample at v0.7.0 (not the full set) |
+| `parseflow` | ParseFlow's own pipeline: PDF text layer, tables, LaTeX from glyphs, Tesseract OCR | nothing (offline, CPU) | 84.8 % on the 20-PDF sample at v0.9.0 (not the full set) |
 | `vlm` | a document OCR model, by default **AllenAI olmOCR-2-7B**, called page by page over an OpenAI-compatible API; ParseFlow's pipeline is the fallback for any page the model cannot do | an API key for a hosted provider, or a GPU running vLLM | to be measured by you, see below |
 
 Every system that scores above 80 % on the public leaderboard is a vision model trained specifically

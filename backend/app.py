@@ -12,6 +12,7 @@ Execution modes
 """
 import json
 import os
+import secrets
 import re
 import shutil
 import sys
@@ -21,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, File, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -56,6 +57,50 @@ ID_RE = re.compile(r"^[a-f0-9]{12}$")
 app = FastAPI(title="ParseFlow")
 STORE = doc_history.Store(DATA)
 YEAR = 365 * 24 * 3600
+# Accounts need storage that outlives the process: a database URL, or a normal server with a disk.
+DURABLE = STORE.remote or not SERVERLESS
+if not STORE.remote and (SERVERLESS or os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT")):
+    print("ParseFlow: no DATABASE_URL set. On this cloud host the local disk is temporary, so accounts and saved "
+          "documents are lost when the server restarts. Set DATABASE_URL to a PostgreSQL database "
+          "(see docs/DEPLOYMENT.md).", file=sys.stderr)
+_DB_SOURCE_MB = float(os.getenv("PARSEFLOW_DB_SOURCE_MB", "50"))
+_PERSISTED = ("meta.json", "status.json", "document.json", "document.md")
+
+
+def _persist(doc_id, source=False):
+    """With a database URL: copy this document's results (and, once, its source file) into the database so
+    every server instance can open it, also after a restart. Never fails the request."""
+    if not STORE.remote:
+        return
+    d = DATA / doc_id
+    try:
+        files = {n: (d / n).read_bytes() for n in _PERSISTED if (d / n).exists()}
+        if source:
+            for f in d.glob("source.*"):
+                if f.stat().st_size <= _DB_SOURCE_MB * 1024 * 1024:
+                    files[f.name] = f.read_bytes()
+        STORE.put_files(doc_id, files)
+    except Exception as e:
+        print(f"ParseFlow: could not save {doc_id} to the database ({type(e).__name__}: {e})", file=sys.stderr)
+
+
+def _hydrate(doc_id):
+    """Refill a document's folder from the database when this instance does not have it (another instance
+    processed it, or the disk was wiped by a restart)."""
+    d = DATA / doc_id
+    if d.is_dir() or not STORE.remote:
+        return d.is_dir()
+    try:
+        files = STORE.get_files(doc_id)
+    except Exception:
+        return False
+    if not files:
+        return False
+    d.mkdir(parents=True, exist_ok=True)
+    for name, data in files.items():
+        if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", name):
+            (d / name).write_bytes(data)
+    return True
 
 
 def _secure(request):
@@ -70,7 +115,10 @@ async def _identity(request: Request, call_next):
     if fresh:
         anon = uuid.uuid4().hex[:24]
     request.state.anon = anon
-    request.state.user = STORE.session_account(request.cookies.get(doc_history.SESSION_COOKIE))
+    token = request.cookies.get(doc_history.SESSION_COOKIE)
+    # only API calls need the account (static files never wait for the database)
+    request.state.user = (await run_in_threadpool(STORE.session_account, token)
+                          if token and request.url.path.startswith("/api/") else None)
     response = await call_next(request)
     if fresh:
         response.set_cookie(doc_history.ANON_COOKIE, anon, max_age=YEAR, httponly=True, samesite="lax", secure=_secure(request))
@@ -82,10 +130,53 @@ def _owner(request):
     return f"user:{u['id']}" if u else f"anon:{request.state.anon}"
 
 
+SHARE_COOKIE = "pf_view"
+
+
+def _share_tokens(request):
+    return [t for t in (request.cookies.get(SHARE_COOKIE) or "").split(".") if re.fullmatch(r"[A-Za-z0-9_-]{16,64}", t)][:30]
+
+
 def _visible(request, doc_id):
-    """An account's documents are private to it. Guest documents open by their unguessable id."""
+    """An account's documents are private to it (or to people holding its share link). Guest documents open
+    by their unguessable id."""
     owner = STORE.owner_of(doc_id)
-    return not owner or not owner.startswith("user:") or owner == _owner(request)
+    if not owner or not owner.startswith("user:") or owner == _owner(request):
+        return True
+    toks = _share_tokens(request)
+    if toks:
+        r = STORE.doc(doc_id)
+        return bool(r and r.get("share") and r["share"] in toks)
+    return False
+
+
+def _mine(request, doc_id):
+    """Rename, star, share and delete: the owner only."""
+    return bool(ID_RE.match(doc_id or "")) and STORE.owner_of(doc_id) == _owner(request)
+
+
+def _summarize(doc):
+    """What the library shows for a document, computed once when it is read."""
+    st = doc.get("stats") or {}
+    blocks = doc.get("blocks") or []
+    n = max(1, st.get("blocks") or len(blocks))
+    kinds = [str(p.get("kind") or "") for p in doc.get("pages") or []]
+    return dict(pages=st.get("pages") or len(kinds), blocks=st.get("blocks") or len(blocks), tables=st.get("tables", 0),
+                equations=st.get("equations", 0), visuals=st.get("visuals", 0),
+                handwritten=sum(1 for b in blocks if b.get("handwritten") or b.get("type") == "handwritten_text"),
+                verified_pct=round(100 * (st.get("verified") or 0) / n), review=st.get("flagged", 0),
+                headers=st.get("excluded_headers_footers", 0), scanned=sum(1 for k in kinds if k.startswith("scanned") or k == "image"),
+                converted=bool(doc.get("converted")))
+
+
+def _record_summary(doc_id):
+    d = DATA / doc_id
+    try:
+        doc = json.loads((d / "document.json").read_text())
+        size = sum(f.stat().st_size for f in d.glob("original.*")) or sum(f.stat().st_size for f in d.glob("source.*"))
+        STORE.update_doc(doc_id, summary=json.dumps(_summarize(doc)), size=size)
+    except Exception:
+        pass
 
 
 GUEST_HOURS = float(os.getenv("GUEST_RETENTION_HOURS", "24"))
@@ -94,7 +185,7 @@ _LAST_SWEEP = [0.0]
 
 def _sweep_guest_docs(force=False):
     """Guest documents are temporary: removed GUEST_RETENTION_HOURS after upload (0 = keep)."""
-    if GUEST_HOURS <= 0 or SERVERLESS or (not force and time.time() - _LAST_SWEEP[0] < 600):
+    if GUEST_HOURS <= 0 or not DURABLE or (not force and time.time() - _LAST_SWEEP[0] < 600):
         return
     _LAST_SWEEP[0] = time.time()
     for doc_id in STORE.expired_guest_docs(GUEST_HOURS):
@@ -119,8 +210,7 @@ def _job_dir(doc_id, request=None):
         return None
     if request is not None and not _visible(request, doc_id):
         return None
-    d = DATA / doc_id
-    return d if d.is_dir() else None
+    return DATA / doc_id if _hydrate(doc_id) else None
 
 
 @app.get("/api/health")
@@ -130,7 +220,7 @@ def health():
                 llm=dict(configured=lc["configured"], provider=lc["provider"], model=llm.public(lc)["model"]),
                 ai_settings_editable=not SERVERLESS,
                 mode="serverless" if SERVERLESS else "worker",
-                history=True, formats=formats.describe(),
+                history=True, accounts=DURABLE, storage=STORE.kind, formats=formats.describe(),
                 high_accuracy_ocr=dict(vlm_ocr.public(), in_app=os.getenv("HIGH_ACCURACY_OCR", "1") != "0"),
                 limits=dict(max_upload_mb=SETTINGS.max_upload_mb, max_pages=SETTINGS.max_pages or None,
                             legacy_MAX_PAGES_ignored=SETTINGS.legacy_max_pages_ignored,
@@ -142,6 +232,8 @@ def _run_job(doc_id, src, name, d, prog):
         # phase 1: everything except reading text inside images / handwriting -> the document opens now
         doc = pipeline.process(str(src), name, doc_id, str(d), prog, defer_visuals=not SERVERLESS)
         STORE.update_doc(doc_id, status=prog.status or "complete")
+        _record_summary(doc_id)
+        _persist(doc_id)
         if doc.get("pending_visuals"):
             # phase 2: read those regions in the background; the open document refreshes when done
             try:
@@ -149,6 +241,8 @@ def _run_job(doc_id, src, name, d, prog):
             except Exception as e:
                 prog.enrich = dict(state="failed", error=type(e).__name__)
                 prog.save(force=True)
+            _record_summary(doc_id)
+            _persist(doc_id)
         return
     except pipeline.Cancelled:
         prog.status = "cancelled"
@@ -161,6 +255,7 @@ def _run_job(doc_id, src, name, d, prog):
                                                  message=f"Unexpected failure ({type(e).__name__}); the server is still running.")
         prog.save(force=True)
     STORE.update_doc(doc_id, status=prog.status)
+    _persist(doc_id)
 
 
 @app.post("/api/process")
@@ -210,6 +305,7 @@ async def process(request: Request, file: UploadFile = File(...)):
     prog.total_pages = pages
     prog.save(force=True)
     STORE.add_doc(doc_id, _owner(request), name, pages)
+    await run_in_threadpool(_persist, doc_id, True)
     _sweep_guest_docs()
     if SERVERLESS:
         if pages > SETTINGS.sync_max_pages:
@@ -285,25 +381,34 @@ def skip_ocr(doc_id: str, request: Request):
 
 
 @app.get("/api/document/{doc_id}")
-def document(doc_id: str, request: Request):
+def document(doc_id: str, request: Request, download: int = 0):
     d = _job_dir(doc_id, request)
     p = d / "document.json" if d else None
     if not p or not p.exists():
         return err("PF-404", "Not Ready", "Document not available.", 404)
+    if download:
+        return FileResponse(p, media_type="application/json", filename=_download_name(doc_id, ".json"))
     return FileResponse(p, media_type="application/json")
 
 
+def _download_name(doc_id, ext):
+    r = STORE.doc(doc_id) or {}
+    base = re.sub(r"[^\w.\- ]+", "_", (r.get("filename") or doc_id)).strip() or doc_id
+    return re.sub(r"\.(pdf|png|jpe?g)$", "", base, flags=re.I) + ext
+
+
 @app.get("/api/document/{doc_id}/markdown")
-def document_markdown(doc_id: str, request: Request, annotate: int = 0, include_headers: int = 0):
+def document_markdown(doc_id: str, request: Request, annotate: int = 0, include_headers: int = 0, download: int = 0):
     d = _job_dir(doc_id, request)
     p = d / "document.json" if d else None
     if not p or not p.exists():
         return err("PF-404", "Not Ready", "Document not available.", 404)
     if not annotate and not include_headers and (d / "document.md").exists():
-        return PlainTextResponse((d / "document.md").read_text(encoding="utf-8"), media_type="text/markdown; charset=utf-8")
-    doc = json.loads(p.read_text())
-    return PlainTextResponse(markdown.render(doc, annotate=bool(annotate), include_headers=bool(include_headers)),
-                             media_type="text/markdown; charset=utf-8")
+        text = (d / "document.md").read_text(encoding="utf-8")
+    else:
+        text = markdown.render(json.loads(p.read_text()), annotate=bool(annotate), include_headers=bool(include_headers))
+    headers = {"Content-Disposition": f'attachment; filename="{_download_name(doc_id, ".md")}"'} if download else None
+    return PlainTextResponse(text, media_type="text/markdown; charset=utf-8", headers=headers)
 
 
 @app.get("/api/page/{doc_id}/{n}.png")
@@ -464,6 +569,8 @@ def read_visual_endpoint(doc_id: str, block_id: str, request: Request):
         tmp.write_text(json.dumps(doc))
         os.replace(tmp, p)
         (d / "document.md").write_text(markdown.render(doc), encoding="utf-8")
+    _record_summary(doc_id)
+    _persist(doc_id)
     return dict(block=b, ai=vision.info())
 
 
@@ -587,7 +694,20 @@ def clear_ai(request: Request):
 # ------------------------------------------------------------------ history and optional sign-in
 
 def _history_row(r):
+    r = dict(r)
+    r["summary"] = json.loads(r["summary"]) if isinstance(r.get("summary"), str) and r["summary"] else None
+    r["starred"], r["shared"] = bool(r.get("starred")), bool(r.get("share"))
+    r.pop("share", None)
+    r.pop("owner", None)
     d = DATA / r["doc_id"]
+    if r["summary"] is None and (d / "document.json").exists() and r["status"] in ("complete", "partial"):
+        _record_summary(r["doc_id"])                       # documents converted before v0.9.1
+        row = STORE.doc(r["doc_id"]) or {}
+        r["summary"] = json.loads(row["summary"]) if row.get("summary") else None
+        r["size"] = row.get("size")
+    if not d.is_dir() and r["status"] not in ("processing", "running"):
+        # listed from the database; the folder is refilled when the document is opened
+        return dict(r, available=r["status"] == "complete" and STORE.remote, exists=STORE.remote)
     st = r["status"]
     if st in ("processing", "running") and (d / "status.json").exists():
         try:
@@ -602,8 +722,115 @@ def _history_row(r):
 @app.get("/api/history")
 def history_list(request: Request):
     rows = [_history_row(r) for r in STORE.docs(_owner(request))]
-    return dict(enabled=True, signed_in=bool(request.state.user), guest_hours=GUEST_HOURS,
-                documents=[r for r in rows if r["exists"]])
+    docs = [r for r in rows if r["exists"]]
+    return dict(enabled=True, signed_in=bool(request.state.user), guest_hours=GUEST_HOURS, storage=STORE.kind,
+                documents=docs, totals=dict(documents=len(docs), pages=sum(r.get("pages") or 0 for r in docs),
+                                            bytes=sum(r.get("size") or 0 for r in docs)))
+
+
+@app.patch("/api/history/{doc_id}")
+async def edit_history(doc_id: str, request: Request):
+    """Rename or star one of your documents."""
+    if not _mine(request, doc_id):
+        return err("PF-404", "Not Found", "No such document in your history.", 404)
+    try:
+        b = await request.json()
+    except Exception:
+        return err("PF-400", "Bad Request", "Expected JSON: {filename?, starred?}.")
+    kw = {}
+    if "filename" in b:
+        name = re.sub(r"[\x00-\x1f/\\]+", " ", str(b.get("filename") or "")).strip()[:180]
+        if not name:
+            return err("PF-400", "Name Needed", "Give the document a name.")
+        kw["filename"] = name
+    if "starred" in b:
+        kw["starred"] = 1 if b.get("starred") else 0
+    STORE.update_doc(doc_id, **kw)
+    return dict(ok=True, **{k: (bool(v) if k == "starred" else v) for k, v in kw.items()})
+
+
+@app.post("/api/history/{doc_id}/share")
+def share_doc(doc_id: str, request: Request):
+    """A read-only link to one of your documents; anyone with the link can open it until you stop sharing."""
+    if not _mine(request, doc_id):
+        return err("PF-404", "Not Found", "No such document in your history.", 404)
+    token = (STORE.doc(doc_id) or {}).get("share") or secrets.token_urlsafe(18)
+    STORE.update_doc(doc_id, share=token)
+    return dict(ok=True, url=str(request.base_url).rstrip("/") + "/s/" + token)
+
+
+@app.delete("/api/history/{doc_id}/share")
+def unshare_doc(doc_id: str, request: Request):
+    if not _mine(request, doc_id):
+        return err("PF-404", "Not Found", "No such document in your history.", 404)
+    STORE.update_doc(doc_id, share=None)
+    return dict(ok=True)
+
+
+@app.get("/s/{token}")
+def open_shared(token: str, request: Request):
+    r = STORE.doc_by_share(token)
+    if not r:
+        return RedirectResponse("/?shared=gone", status_code=303)
+    toks = [t for t in _share_tokens(request) if t != token][-19:] + [token]
+    resp = RedirectResponse(f"/?open={r['doc_id']}", status_code=303)
+    resp.set_cookie(SHARE_COOKIE, ".".join(toks), max_age=YEAR, httponly=True, samesite="lax", secure=_secure(request))
+    return resp
+
+
+@app.get("/api/history/export.zip")
+def export_all(request: Request):
+    """Every document you can see in your library: Markdown + JSON, in one ZIP."""
+    import io
+    import zipfile
+    buf, used = io.BytesIO(), set()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for r in STORE.docs(_owner(request), limit=1000):
+            d = DATA / r["doc_id"] if _hydrate(r["doc_id"]) else None
+            if not d or not (d / "document.json").exists():
+                continue
+            base = _download_name(r["doc_id"], "")
+            name, k = base, 2
+            while name in used:
+                name, k = f"{base} ({k})", k + 1
+            used.add(name)
+            if (d / "document.md").exists():
+                z.write(d / "document.md", f"{name}.md")
+            z.write(d / "document.json", f"{name}.json")
+    return Response(buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="parseflow-documents.zip"'})
+
+
+@app.delete("/api/history")
+def delete_all_history(request: Request):
+    """Delete every document in your library (guest: this browser's; member: your account's)."""
+    n = 0
+    for r in STORE.docs(_owner(request), limit=10000):
+        if r["doc_id"] in JOBS:
+            JOBS[r["doc_id"]].cancel()
+        STORE.delete_doc(r["doc_id"])
+        shutil.rmtree(DATA / r["doc_id"], True)
+        n += 1
+    return dict(ok=True, deleted=n)
+
+
+@app.post("/api/auth/delete")
+async def delete_account(request: Request):
+    """Delete your account and every document in it. Needs your password."""
+    u = request.state.user
+    if not u:
+        return err("PF-401", "Not Logged In", "Log in first.", 401)
+    try:
+        b = await request.json()
+    except Exception:
+        b = {}
+    if not await run_in_threadpool(STORE.check_password, u["id"], str(b.get("password") or "")):
+        return err("PF-400", "Account Not Deleted", "The password is not correct.")
+    delete_all_history(request)
+    STORE.delete_account(u["id"])
+    r = JSONResponse(dict(ok=True))
+    r.delete_cookie(doc_history.SESSION_COOKIE)
+    return r
 
 
 # ------------------------------------------------------------------ accounts (username + password)
@@ -639,13 +866,16 @@ async def _creds(request):
 def me(request: Request):
     u = request.state.user
     return dict(signed_in=bool(u), user=dict(username=u["username"]) if u else None,
-                accounts=True, guest_hours=GUEST_HOURS)
+                accounts=DURABLE, guest_hours=GUEST_HOURS)
 
 
 @app.post("/api/auth/register")
 async def register(request: Request):
     username, password = await _creds(request)
     ip = request.client.host if request.client else "?"
+    if not DURABLE:
+        return err("PF-403", "Accounts Need A Database", "This server has no database for accounts yet. "
+                   "Set DATABASE_URL (see docs/DEPLOYMENT.md); documents still open without an account.", 403)
     if _too_many("reg:" + ip):
         return err("PF-429", "Too Many Attempts", "Too many attempts. Wait a few minutes and try again.", 429)
     try:
@@ -661,6 +891,9 @@ async def login(request: Request):
     username, password = await _creds(request)
     ip = request.client.host if request.client else "?"
     key = f"login:{ip}:{username.lower()}"
+    if not DURABLE:
+        return err("PF-403", "Accounts Need A Database", "This server has no database for accounts yet. "
+                   "Set DATABASE_URL (see docs/DEPLOYMENT.md).", 403)
     if _too_many(key):
         return err("PF-429", "Too Many Attempts", "Too many wrong passwords. Wait five minutes and try again.", 429)
     uid = await run_in_threadpool(STORE.check_login, username, password)

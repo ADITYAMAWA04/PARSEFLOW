@@ -42,7 +42,7 @@ def test_history_per_browser_open_and_delete(A, tmp_path):
     assert not (A.DATA / doc).exists()
 
 
-def test_sign_in_is_gone(A):
+def test_google_sign_in_is_gone(A):
     c = TestClient(A.app)
     assert c.get("/auth/google/login", follow_redirects=False).status_code == 404
-    assert "accounts" not in A.health()
+    assert A.health()["accounts"] is True and A.health()["storage"] == "sqlite"

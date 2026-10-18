@@ -1,4 +1,4 @@
 {
-  "note": "Floor for the olmOCR-Bench SAMPLE set (20 PDFs, 99 tests in dataset.jsonl), official scorer. History: 72.7% -> 69.7% (v0.5, poster page) -> 78.8% (v0.7.0: column-split sentences, drop caps, word gaps in tight fonts, TeX accents, primes in subscripts, spanning table headers, table grid columns, numbered sections down columns). Floor = 78.8 minus 2 tests of slack. The sample was used for development, so it overstates the full benchmark. This is not the official benchmark score.",
-  "dataset_jsonl_min": 76.8
+  "note": "Floor for the olmOCR-Bench SAMPLE set (20 PDFs, 99 tests in dataset.jsonl), official scorer. History: 72.7% -> 69.7% (v0.5, poster page) -> 78.8% (v0.7.0: column-split sentences, drop caps, word gaps in tight fonts, TeX accents, primes in subscripts, spanning table headers, table grid columns, numbered sections down columns). -> 84.8% (v0.9.0: footer vocabulary + font-size split, photo-texture OCR filtered, several headings over one table, summary rows under a double rule, last row under a ruled table, visible text over a background picture). Floor = 84.8 minus 2 tests of slack. The sample was used for development, so it overstates the full benchmark. This is not the official benchmark score.",
+  "dataset_jsonl_min": 82.8
 }

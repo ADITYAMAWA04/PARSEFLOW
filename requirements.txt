@@ -16,3 +16,5 @@ python-pptx>=1.0
 openpyxl>=3.1
 markdown>=3.5
 charset-normalizer>=3.0
+# Accounts and saved documents on cloud hosts (DATABASE_URL=postgresql://...); not used otherwise
+psycopg[binary]>=3.1

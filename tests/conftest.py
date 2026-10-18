@@ -35,7 +35,7 @@ def _isolated_env(monkeypatch, tmp_path):
     vlm_ocr._DOWN.update(until=0.0, why=None, server=None)
     for k in ("AI_BASE_URL", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "PUBLIC_URL"):
         monkeypatch.delenv(k, raising=False)
-    for k in ("TESSERACT_CMD",):
+    for k in ("TESSERACT_CMD", "DATABASE_URL", "POSTGRES_URL", "POSTGRES_URL_NON_POOLING", "VERCEL", "RENDER"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("OCR_WORKERS", "1")
     yield

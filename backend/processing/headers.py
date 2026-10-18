@@ -23,7 +23,10 @@ PAGE_NUM = re.compile(
 VOCAB = re.compile(
     r"(\bvol(\.|ume)?\b|\bissue\b|\bno\.\s*\d|\bdoi\b|\bissn\b|\bisbn\b|https?://|www\.|\.com\b|\.org\b|\.edu\b|"
     r"©|\(c\)|copyright|all rights reserved|\bjournal\b|\bproceedings\b|\barxiv:|downloaded from|published by|available (at|online)|retrieved from|printed in|"
-    r"\bpp\.\s*\d|\bconfidential\b|\bpreprint\b|\bdraft\b|\bmanuscript\b|\bpage\s+\d+|licen[cs]e)",
+    r"\bpp\.\s*\d|\bconfidential\b|\bpreprint\b|\bdraft\b|\bmanuscript\b|\bpage\s+\d+|licen[cs]e|"
+    # document-control footers: revision, part number, form number, issue date
+    r"\brevision\s*:?\s*[\w.]*\d|\brev\.\s*[\w.]*\d|\bp/n\b|\bpart\s+(no|number)\b|\bform\s+(no\.?|number)\s*\w*\d|"
+    r"\b\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(19|20)\d{2}\b)",
     re.I,
 )
 FOOTNOTE_START = re.compile(r"^\s*(\d{1,2}|[*†‡§¶]|[a-z])[\s.)]")

@@ -40,7 +40,7 @@ def _figure_text(b):
     parts = []
     dt = b.get("detected_text")
     if isinstance(dt, list) and dt:
-        parts.append("\n".join(d.get("text", "") for d in dt if d.get("text")))
+        parts.append("\n".join(d.get("text", "") for d in dt if d.get("text") and d.get("in_markdown", True)))
     elif b.get("ocr_text"):
         parts.append(b["ocr_text"])
     return "\n".join(p for p in parts if p.strip())

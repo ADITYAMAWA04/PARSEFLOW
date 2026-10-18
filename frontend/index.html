@@ -1,35 +1,47 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>ParseFlow</title><meta name="description" content="Convert PDFs and images into Markdown and JSON where every line links back to its page region.">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&family=Caveat:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=0.8.2"></head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Caveat:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=0.9.1"></head><body>
 <section id="landing" class="view on">
-<nav class="nav"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M7 2.8h7.5l4.2 4.2v14.2H7z"/><path d="M14.5 2.8V7h4.2"/><path d="M10 11h5.5M10 14.5h5.5M10 18h3"/><path d="M4 9.5v10" stroke="var(--ac)" stroke-width="2" stroke-linecap="round"/></svg>ParseFlow</div><div class="navr"><span id="beb" class="cap"><i></i>Checking the server…</span><span id="acct"></span></div></nav>
+<nav class="nav"><a class="brand" href="/" aria-label="ParseFlow home"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 19V5h6a4 4 0 010 8H7"/><path d="M13.5 16.5l2 2 4-4.5"/></svg></span>ParseFlow</a>
+ <div class="navlinks"><a href="#library" onclick="event.preventDefault();libOpen('all')">My documents</a><a href="#features">Features</a><a href="#how">How it works</a><a href="#formats">Formats</a></div>
+ <div class="navr"><span id="beb" class="cap"><i></i>Checking the server…</span><span id="acct"></span></div></nav>
 <div class="hero-wrap">
  <div class="hero">
-  <h1>Turn documents into text you can check.</h1>
-  <p class="lede">ParseFlow converts documents of almost any kind, whether digital, scanned or handwritten, into Markdown and structured JSON. Every paragraph, table, equation and figure keeps a link to the page region it came from, so any line can be traced back to its source in one click.</p>
+  <span class="eyebrow"><i></i>Offline document parser · Markdown + JSON with evidence</span>
+  <h1><span class="gt">ParseFlow</span> makes any document readable to AI.</h1>
+  <p class="lede">PDFs, scans, Word, Excel, PowerPoint and images become clean Markdown and structured JSON. Every paragraph, table, equation and figure keeps a link to the page region it came from.</p>
   <input id="fi" type="file" hidden onchange="onFile(this.files[0])">
-  <div class="drop" id="drop" role="button" tabindex="0" onclick="fi.click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();fi.click()}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4l4 4M4 15v4a1 1 0 001 1h14a1 1 0 001-1v-4" stroke-linecap="round" stroke-linejoin="round"/></svg><div><b>Choose a document or drop it here</b><span>PDF, Word, Excel, PowerPoint, images (JPG, PNG, TIFF...), text, HTML, Markdown, CSV, EPUB and more, of any length.</span></div></div>
+  <div class="upcard" id="drop" onclick="if(event.target.closest('a,.choice'))return;fi.click()">
+   <button class="upbtn" type="button" onclick="event.stopPropagation();fi.click()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" stroke-linecap="round" stroke-linejoin="round"/></svg>Upload a document</button>
+   <p class="drophint">or drop a file anywhere on this card</p>
+   <div class="choices" id="choices"></div>
+   <div class="fmts" id="formats"><span>PDF</span><span>Word</span><span>Excel</span><span>PowerPoint</span><span>Images</span><span>Scans</span><span>HTML</span><span>Markdown</span><span>CSV</span><span>EPUB</span><em>any length</em></div>
+  </div>
   <div id="uerr"></div>
   <p class="alt">No document to hand? <button onclick="startDemo()">Open the sample document</button> or <button onclick="present()">take the guided tour</button>.</p>
  </div>
  <figure class="specimen" style="margin:0" aria-label="Example: a page region and the record kept for it">
-  <div class="cap2"><span>Sample page, region <span id="mkid"></span></span><span>The record kept for it</span></div>
+  <div class="cap2"><span><b class="live"><i></i>Evidence</b> Sample page, region <span id="mkid"></span></span><span>The record kept for it</span></div>
   <div class="mock"><div class="l" id="mockl"></div><div class="r"><pre id="mockj"></pre></div></div>
  </figure>
 </div>
+<div class="marquee" aria-hidden="true"><div class="track"><span><b>Reading order</b> for multi-column pages</span><span><b>Running headers</b> removed, kept in JSON</span><span><b>LaTeX</b> from PDF maths</span><span><b>Merged cells</b> as HTML tables</span><span><b>Offline OCR</b> for scans</span><span><b>Evidence</b> on every block</span><span><b>Ask</b> with cited pages</span><span><b>Folder to Markdown</b> from the command line</span><span><b>Reading order</b> for multi-column pages</span><span><b>Running headers</b> removed, kept in JSON</span><span><b>LaTeX</b> from PDF maths</span><span><b>Merged cells</b> as HTML tables</span><span><b>Offline OCR</b> for scans</span><span><b>Evidence</b> on every block</span><span><b>Ask</b> with cited pages</span><span><b>Folder to Markdown</b> from the command line</span></div></div>
 <section class="recent" id="recent" hidden></section>
-<section class="facts">
- <div><h2>What it reads</h2><ul><li>Digital PDFs, including multi-column papers and long reports, with no page limit</li><li>Word, Excel, PowerPoint, text, HTML, Markdown, CSV, EPUB and image files (TIFF, PNG, JPG, WebP...)</li><li>Tables, keeping merged cells</li><li>Equations, written out as LaTeX</li><li>Scanned pages, with offline OCR</li><li>Handwriting, figures and screenshots, with a connected AI model</li></ul></div>
- <div><h2>How results are marked</h2><ul class="legend"><li><span class="pill verified">Verified</span><span>Confirmed by an independent source, such as the PDF's own text.</span></li><li><span class="pill review">Review</span><span>Read by one method only. Worth a glance against the page.</span></li><li><span class="pill failed">Not read</span><span>Could not be read. The region is kept for you to check.</span></li></ul></div>
- <div><h2>Ask about it</h2><p>Ask questions, or for a summary or practice questions. Answers cite the pages they rely on and label anything that comes from outside the document. Without an AI model, Ask quotes the closest passages instead.</p></div>
+<section class="facts" id="features">
+ <div class="fcard"><span class="ficon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 12h6M10 16h6"/></svg></span><h2>What it reads</h2><ul><li>Digital PDFs, including multi-column papers and long reports, with no page limit</li><li>Word, Excel, PowerPoint, text, HTML, Markdown, CSV, EPUB and image files</li><li>Tables, keeping merged cells</li><li>Equations, written out as LaTeX</li><li>Scanned pages, with offline OCR</li><li>Handwriting, figures and screenshots, with a connected AI model</li></ul></div>
+ <div class="fcard" id="how"><span class="ficon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg></span><h2>How results are marked</h2><ul class="legend"><li><span class="pill verified">Verified</span><span>Confirmed by an independent source, such as the PDF's own text.</span></li><li><span class="pill review">Review</span><span>Read by one method only. Worth a glance against the page.</span></li><li><span class="pill failed">Not read</span><span>Could not be read. The region is kept for you to check.</span></li></ul></div>
+ <div class="fcard"><span class="ficon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></span><h2>Ask about it</h2><p>Ask questions, or for a summary or practice questions. Answers cite the pages they rely on and label anything that comes from outside the document. Without an AI model, Ask quotes the closest passages instead.</p></div>
 </section>
+<section class="steps"><h2>Three steps</h2><ol><li><b>Upload</b><span>Any document. Long files open after the first pages are read.</span></li><li><b>Check</b><span>Click a box on the page to see what was read there and how sure ParseFlow is.</span></li><li><b>Use it</b><span>Copy or download the Markdown and JSON, or ask questions with cited pages.</span></li></ol></section>
 <p class="foot">Built by Team DEADLOCK for the DQCL ParseAnything problem statement at DataQuest 3.0.</p>
 </section>
 
+<section id="library" class="view lib" aria-label="Your documents"></section>
+
 <section id="procv" class="view"><div class="proc"><h2 style="margin:0 0 14px">Processing</h2><div class="pcard"><div id="pfile"></div><div class="up"><i id="upb"></i></div></div><div id="stages"></div><div id="skipbox"></div></div></section>
 
-<section id="app" class="app"><div class="top"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M7 2.8h7.5l4.2 4.2v14.2H7z"/><path d="M14.5 2.8V7h4.2"/><path d="M10 11h5.5M10 14.5h5.5M10 18h3"/><path d="M4 9.5v10" stroke="var(--ac)" stroke-width="2" stroke-linecap="round"/></svg>ParseFlow</div><span class="fn" id="fname"></span><span class="demo" id="demob">Sample document</span><span style="flex:1"></span><span id="beb2" class="cap"></span><button class="btn sm go" onclick="DOC.demo?tourGo(0):present()">Guided tour</button> <button class="btn sm" onclick="tourEnd();show('landing')">New document</button></div>
+<section id="app" class="app"><div class="top"><a class="brand sm" href="/" onclick="event.preventDefault();tourEnd();show('landing')"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 19V5h6a4 4 0 010 8H7"/><path d="M13.5 16.5l2 2 4-4.5"/></svg></span>ParseFlow</a><span class="fn" id="fname"></span><span class="demo" id="demob">Sample document</span><span style="flex:1"></span><span id="beb2" class="cap"></span><button class="btn sm go" onclick="DOC.demo?tourGo(0):present()">Guided tour</button> <button class="btn sm" onclick="tourEnd();libOpen()">My documents</button> <button class="btn sm" onclick="tourEnd();show('landing')">New document</button></div>
 <div class="main" id="main"><div class="thumbs" id="thumbs"></div><div class="vw"><div id="guide"></div><div class="bar"><span id="pginfo"></span><span style="flex:1"></span><span class="legend-mini" title="Box colours on the page"><span><i style="background:var(--ok)"></i>Verified</span><span><i style="background:var(--wn)"></i>Review</span><span><i style="background:var(--er)"></i>Not read</span></span><label><input type="checkbox" id="ovt" checked onchange="renderPage()"> Show boxes</label></div><div class="page" id="page"></div></div>
 <div class="split" id="split" role="separator" aria-orientation="vertical" aria-label="Resize the side panel" tabindex="0" title="Drag to resize. Double-click to reset."></div>
 <div class="rt"><div class="tabs" id="tabs" role="tablist"></div><div class="tabhelp" id="tabhelp"></div><div class="pane" id="pane"></div></div></div></section>
@@ -132,7 +144,7 @@ if(tab=='Inspector'){const b=DOC.blocks.find(x=>x.block_id==sel);p.innerHTML=!b?
 ${b.latex?`<div class="k">Equation</div><div class="tex" data-tex="${escA(b.latex)}"></div><div class="k">LaTeX</div><pre>${esc(b.latex)}</pre>`:''}${b.ocr_text?`<div class="k">OCR text from region (labels only)</div><pre>${esc(b.ocr_text)}</pre>`:''}${b.data?`<div class="k">Chart data</div><pre>${esc(JSON.stringify(b.data))}</pre>`:''}${b.relationships&&b.relationships.length&&b.type!='diagram'?`<div class="k">Relationships</div><pre>${esc(b.relationships.join('\n'))}</pre>`:''}${b.evidence?`<div class="k">Verification evidence</div>${esc(b.evidence)}`:''}${b.confidence_level?`<div class="k">Confidence level</div>${esc(b.confidence_level)}`:''}${b.role&&b.role!='body'?`<div class="k">Role</div>${esc(b.role.replace('_',' '))} &middot; ${b.in_markdown===false?'excluded from the Markdown body':'kept'}${b.role_evidence?` (${esc(b.role_evidence)})`:''}`:''}${b.detected_text?`<div class="k">Text found in this visual</div><pre>${esc(b.detected_text.map(d=>d.text+(d.source=='ocr'?`  [OCR ${(d.confidence*100|0)}%]`:'')).join('\n'))}</pre>`:''}${b.elements?`<div class="k">Elements</div><pre>${esc(b.elements.join('\n'))}</pre>`:''}
 ${b.warnings.map(w=>`<div class="note">${esc(w)}</div>`).join('')}<div style="margin-top:14px"><button class="btn pri" onclick="source('${b.block_id}')">View Source</button></div>`}
 else if(tab=='Overview'){const bl=DOC.blocks,c=v=>bl.filter(b=>b.verification==v).length,lanes={};bl.forEach(b=>{(lanes[b.extractor]??=[]).push(b)});
-p.innerHTML=`<h3 style="margin:0 0 8px">Document Health</h3><div class="grid">${[['Pages',DOC.pages.length,''],['Blocks',bl.length,''],['Tables',bl.filter(b=>b.type=='table').length,''],['Visuals',bl.filter(isViz).length,''],['Handwritten',bl.filter(isHW).length,''],['Verified',c('verified'),'g'],['To check',c('review')+c('failed'),'']].map(([a,b,k])=>`<div class="stat ${k}"><b>${b}</b><span>${a}</span></div>`).join('')}</div>
+p.innerHTML=`<h3 style="margin:0 0 8px">Document Health</h3><div class="grid">${[['Pages',DOC.pages.length,''],['Blocks',bl.length,''],['Tables',bl.filter(b=>b.type=='table').length,''],['Visuals',bl.filter(isViz).length,''],['Handwritten',bl.filter(isHW).length,''],['Verified',c('verified'),'g'],['To check',c('review')+c('failed'),(c('review')+c('failed'))?'w':'']].map(([a,b,k])=>`<div class="stat ${k}"><b>${b}</b><span>${a}</span></div>`).join('')}</div>
 <h3 style="margin:18px 0 6px">Pipeline</h3>${['Detect','Analyze','Route','Extract','Assemble','Verify','Output'].map(s=>`<div class="mono" style="font-size:12px"><span style="color:var(--ok)">✓</span> ${s}</div>`).join('')}
 <h3 style="margin:18px 0 6px">Intelligent Router</h3>${Object.entries(lanes).map(([e,a])=>`<div class="st"><span>${EXT[e]}</span><small class="mono">${a.length} region${a.length>1?'s':''} · ${LANE[e]}</small></div>`).join('')}
 <p style="color:var(--mu);font-size:12px">Vision processing is used for ${bl.filter(b=>LANE[b.extractor]=='VISION').length} of ${bl.length} regions; digital text and tables stay local.</p>${warnHTML()}`}
@@ -155,7 +167,7 @@ function mdLite(t){return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/
 
 
 function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click()}
-function show(v){['landing','procv','app'].forEach(i=>$(i).classList.toggle('on',i==v))}
+function show(v){['landing','procv','app','library'].forEach(i=>$(i).classList.toggle('on',i==v))}
 const STG=[['DETECT','Document detected'],['ANALYZE','Pages and regions identified'],['ROUTE','Content regions classified'],['EXTRACT','Extracting content'],['ASSEMBLE','Reconstructing document'],['VERIFY','Checking evidence'],['OUTPUT','Generating Markdown + JSON']];
 /*PB*/
 function pdfBlocks(items,W,H){ // items: [{s,x,y,h,w}] in page pixels (y = baseline). Pure function.
@@ -320,4 +332,4 @@ if(!BE)return localProcess(f,ext,sz);
 upload(f,ext,sz)}
 const dz=$('drop');['dragover','dragenter'].forEach(e=>document.addEventListener(e,x=>{x.preventDefault();dz.classList.add('hv')}));['dragleave','drop'].forEach(e=>document.addEventListener(e,x=>{x.preventDefault();dz.classList.remove('hv');if(e=='drop')onFile(x.dataTransfer.files[0])}));
 {const _rt=renderTabs;renderTabs=function(){_rt();renderTex()}}
-showcase();</script><script src="ai.js?v=0.8.2"></script><script src="history.js?v=0.8.2"></script><script src="layout.js?v=0.8.2"></script><script src="live.js?v=0.8.2"></script></body></html>
+showcase();</script><script src="ai.js?v=0.9.1"></script><script src="history.js?v=0.9.1"></script><script src="layout.js?v=0.9.1"></script><script src="live.js?v=0.9.1"></script><script src="library.js?v=0.9.1"></script></body></html>

@@ -70,7 +70,7 @@ recorded floor (`bench/expected_sample_score.json`), and `python -m pytest -q` r
 
 ## Honest notes
 
-* The 20-PDF sample was used during development; its score (78.8 % at v0.7.0) overstates the full
+* The 20-PDF sample was used during development; its score (84.8 % at v0.9.0) overstates the full
   benchmark. Only the full run above counts.
 * Handwriting, scanned equations and text drawn as graphics need a recognition model. The
   offline pipeline keeps and flags those regions, but reads little of them.

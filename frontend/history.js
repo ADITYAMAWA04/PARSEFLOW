@@ -29,7 +29,7 @@ function histRender() {
   if (!HIST.length) { box.hidden = true; box.innerHTML = ''; return; }
   const rows = HIST_ALL ? HIST : HIST.slice(0, 5);
   box.hidden = false;
-  box.innerHTML = `<div class="rh"><h2>Your documents</h2><span class="muted">${ME && ME.signed_in
+  box.innerHTML = `<div class="rh"><h2>Your documents</h2><button class="linkbtn" onclick="libOpen('all')">Open your library →</button><span class="muted">${ME && ME.signed_in
       ? 'Saved in your account. Log in on any computer to open them.'
       : (ME && ME.accounts ? `Kept for ${ME.guest_hours > 0 ? (ME.guest_hours >= 48 ? Math.round(ME.guest_hours / 24) + ' days' : ME.guest_hours + ' hours') : 'now'}, in this browser only. <a href="/login">Log in</a> to save them.` : 'Documents you converted in this browser.')}</span></div>
     <ul class="rlist">${rows.map(r => {
@@ -69,13 +69,27 @@ function histDelete(id) {
 function acctRender() {
   const el = $('acct');
   if (!el) return;
+  choicesRender();
   if (!ME || !ME.accounts) { el.innerHTML = ''; return; }
-  if (!ME.signed_in) { el.innerHTML = '<a class="btn sm" href="/login">Log in</a>'; return; }
+  if (!ME.signed_in) { el.innerHTML = '<span class="authbtns"><a class="btn" href="/login">Log in</a><a class="btn dark" href="/login?mode=register">Sign up</a></span>'; return; }
   const u = ME.user.username;
   el.innerHTML = `<div class="acct-menu"><button class="acct-btn" onclick="acctToggle(event)" aria-haspopup="true"><span class="av">${esc(u.slice(0, 2).toUpperCase())}</span><span class="nm">${esc(u)}</span></button>
     <div class="acct-pop" id="acctpop" hidden><div class="who">Logged in as <b>${esc(u)}</b></div>
-    <button onclick="HIST_ALL=true;show('landing');histLoad().then(()=>{const r=$('recent');if(r)r.scrollIntoView({behavior:'smooth'})})">Your documents</button>
+    <button onclick="libOpen('all')">Your documents</button><button onclick="libSettings()">Settings</button><button onclick="libPrivacy()">Privacy &amp; data</button>
     <button onclick="fetch('/api/auth/logout',{method:'POST'}).finally(()=>location.href='/')">Log out</button></div></div>`;
+}
+function choicesRender() {
+  const el = $('choices');
+  if (!el) return;
+  const hrs = ME && ME.guest_hours > 0 ? (ME.guest_hours >= 48 ? Math.round(ME.guest_hours / 24) + ' days' : ME.guest_hours + ' hours') : '';
+  if (ME && ME.signed_in) {
+    el.innerHTML = `<div class="choice on wide"><b>&#10003; Saving to your account</b><span>Logged in as ${esc(ME.user.username)}. Every upload is kept until you delete it, and only you can open it.</span></div>`;
+  } else if (ME && ME.accounts) {
+    el.innerHTML = `<div class="choice on"><b>&#10003; Continue without an account</b><span>Nothing to fill in.${hrs ? ' Kept ' + hrs + ' in this browser.' : ''}</span></div>
+      <a class="choice" href="/login"><b>&#128274; Log in to save</b><span>Keep every upload and reopen it from any computer.</span></a>`;
+  } else {
+    el.innerHTML = '<div class="choice on wide"><b>&#10003; No account needed</b><span>Your document opens as soon as it is read.</span></div>';
+  }
 }
 function acctToggle(e) { e.stopPropagation(); const p = $('acctpop'); if (p) p.hidden = !p.hidden; }
 document.addEventListener('click', () => { const p = $('acctpop'); if (p) p.hidden = true; });

@@ -18,5 +18,7 @@ services:
         value: "24"
       - key: MAX_UPLOAD_MB
         value: "100"
+      - key: DATABASE_URL        # PostgreSQL (e.g. free Neon): accounts and saved documents survive restarts
+        sync: false
       - key: AI_API_KEY          # optional: Gemini / Groq / Claude / OpenAI key for Ask and image reading
         sync: false

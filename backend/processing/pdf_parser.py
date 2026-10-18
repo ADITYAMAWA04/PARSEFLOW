@@ -444,7 +444,7 @@ def group_blocks(lines_):
         for prev, l in zip(ls, ls[1:]):
             sp, sl = _line_size(prev), _line_size(l)
             gap = l["bbox"][1] - prev["bbox"][3]
-            if gap > 0.9 * max(sp, sl) or abs(sp - sl) > 0.2 * max(sp, sl):
+            if gap > 0.9 * max(sp, sl) or abs(sp - sl) >= 0.18 * max(sp, sl):
                 groups.append(cur)
                 cur = [l]
             else:

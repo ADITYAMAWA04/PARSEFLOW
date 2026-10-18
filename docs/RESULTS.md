@@ -1,19 +1,20 @@
 # Measured results
 
-## Current numbers (v0.8.2) at a glance
+## Current numbers (v0.9.0) at a glance
 
 | | value | what it is |
 |---|---|---|
 | olmOCR-Bench **full** set (1,403 PDFs) | **not measured yet** | the score that counts; run `bench/run_benchmark.py` (SUBMISSION.md) |
-| olmOCR-Bench **sample** (20 PDFs, 99 tests, `dataset.jsonl`) | **78.8 %** (78/99) | development set; overstates the full benchmark |
-| sample by test type | table 18/20, order 12/13, absent 24/24, math 12/12, present 15/30 | |
-| latency, sample, 1 worker | **median 0.35 s/page** (p25 0.19, p75 1.03, p90 3.2, mean 1.17) | 2-vCPU cloud machine, not the 8-core laptop of the target |
+| olmOCR-Bench **sample** (20 PDFs, 99 tests, `dataset.jsonl`) | **84.8 %** (84/99) | development set; overstates the full benchmark |
+| sample, scorer's overall line (incl. baseline + blanks) | 94.9 % ± 2.2 | the number the scorer prints last; not comparable to the leaderboard |
+| sample by test type | table 20/20, order 12/13, absent 24/24, math 12/12, present 16/30 | |
+| latency, sample, 1 worker | **median 0.23 s/page** (p25 0.11, p75 0.68, p90 2.4, mean 0.90) | 2-vCPU cloud machine, not the 8-core laptop of the target |
 
 The older tables further down are kept as history; each says which version it describes.
 
 Everything on this page was measured, not estimated. Where a number comes from a partial or
 synthetic evaluation it says so. **No full olmOCR-Bench score has been measured yet, so the 80 %
-target is not shown to be met.** The offline engine scores 78.8 % on the 20-PDF sample (v0.7.0). The `vlm`
+target is not shown to be met.** The offline engine scores 84.8 % on the 20-PDF sample (v0.9.0). The `vlm`
 engine (olmOCR-2 through an API) is built and checked against AllenAI's code, but it could not be run
 against a real model from the build sandbox (see "The high-accuracy engine" below).
 
@@ -299,3 +300,23 @@ slower than the earlier one: the unchanged v0.5.1 code takes the same time per p
 |---|---|---|
 | v0.8.1 | 0.781 | 1.40 |
 | v0.8.2 | **0.350** | 1.17 |
+
+## v0.9.0: sample 78.8 % -> 84.8 %
+
+Measured with AllenAI's unmodified scorer on the 20-PDF sample (2-vCPU machine, Tesseract 5.3.4,
+no keys). Six tests changed from fail to pass; none changed from pass to fail.
+
+| test(s) | cause | fix (general, not specific to the file) |
+|---|---|---|
+| headers_footers `fff590…` 01a-c (absent) | the "Revision / P/N / date" footer was glued to the paragraph above (8 pt vs 10 pt) and its words were not known footer vocabulary | split a producer block at a font-size change of 18 % or more; document-control vocabulary (revision, P/N, part number, form number, day-month-year date) counts as running-footer evidence |
+| discoverworld t03 (table) | "ReACT  Plan+Execute  Hypothesizer" became one header cell over 11 columns | several headings on the line above a table are split at wide gaps; each spans its own column group |
+| discoverworld t05 (table) | the last row of table 5 sits between its own rules and was left out | a line just under a ruled table whose numbers line up with its columns joins the table; summary rows under a double rule join the table above |
+| test_graphical_text_02 (present) | the poster's visible text layer was ignored because a picture covers the page | on such pages, OCR words that overlap the real text layer are replaced by it; text read in a picture that repeats an overlapping paragraph is left out |
+
+Also: OCR of photo texture ("e", "qu", "Eee") is no longer written into the Markdown (a token needs a
+4-letter word, a confident 3-letter word, or a digit). The comparison that pointed at these tests was a
+run of [Lekisha02/parseflow_02](https://github.com/Lekisha02/parseflow_02) on the same sample (83/99).
+
+Caveat: these were sample failures, so the sample score is now even more optimistic than before.
+Only the full-set run (SUBMISSION.md) says whether the 80 % target is met.
+

@@ -1,6 +1,6 @@
 [project]
 name = "parseflow"
-version = "0.2.0"
+version = "0.9.1"
 description = "Evidence-preserving document intelligence: PDF/image to Markdown + Digital Twin JSON"
 requires-python = ">=3.9"
 dependencies = [
@@ -17,6 +17,7 @@ dependencies = [
     "openpyxl>=3.1",
     "markdown>=3.5",
     "charset-normalizer>=3.0",
+    "psycopg[binary]>=3.1",
 ]
 
 [project.optional-dependencies]

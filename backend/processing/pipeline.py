@@ -306,6 +306,8 @@ def digital_page(page, n, cfg, state, vocab, S, ocr_layer=False):
     tb = pdf_parser.ruled_tables(page) if _has_ruling(page) else []
     if tb:
         wds_all = pdf_parser.words(page)
+        tb = _merge_stacked_tables(tb)
+        _absorb_trailing_rows(tb, wds_all, body)
         for t in tb:
             T.merge_currency_columns(t)
             pdf_parser.extend_header_row(t, wds_all, 1.2 * body)
@@ -507,6 +509,95 @@ def _link_continuations(blocks, line_h=24.0):
     return out
 
 
+def _cells_of(t):
+    return t.get("cells") or [dict(r=i, c=j, rs=1, cs=1, text=x) for i, r in enumerate(t["rows"]) for j, x in enumerate(r)]
+
+
+def _set_cells(t, cells, n_rows, n_cols):
+    rows = [[""] * n_cols for _ in range(n_rows)]
+    for c in cells:
+        if 0 <= c["r"] < n_rows and 0 <= c["c"] < n_cols:
+            rows[c["r"]][c["c"]] = c["text"]
+    t.update(cells=cells, rows=rows, n_rows=n_rows, n_cols=n_cols)
+
+
+def _col_index(cx, x):
+    return min(range(len(cx)), key=lambda k: abs(cx[k] - x))
+
+
+def _merge_stacked_tables(tables):
+    """A ruled table split in two by a double rule (summary rows such as 'Average' under the body) is one
+    table: the lower part's columns are mapped onto the upper part's column boundaries."""
+    tables = sorted(tables, key=lambda t: t["bbox"][1])
+    out = []
+    for t in tables:
+        p = out[-1] if out else None
+        if (p and p.get("col_x") and t.get("col_x") and abs(p["bbox"][0] - t["bbox"][0]) <= 3 and abs(p["bbox"][2] - t["bbox"][2]) <= 3
+                and 0 <= t["bbox"][1] - p["bbox"][3] <= 12 and len(t["col_x"]) <= len(p["col_x"])
+                and all(min(abs(x - y) for y in p["col_x"]) <= 3 for x in t["col_x"])):
+            cx = p["col_x"]
+            n_rows = p.get("n_rows") or len(p["rows"])
+            cells = list(_cells_of(p))
+            for c in _cells_of(t):
+                a = _col_index(cx, t["col_x"][c["c"]])
+                b = _col_index(cx, t["col_x"][min(len(t["col_x"]) - 1, c["c"] + c.get("cs", 1))])
+                cells.append(dict(c, r=n_rows + c["r"], c=a, cs=max(1, b - a)))
+            _set_cells(p, cells, n_rows + (t.get("n_rows") or len(t["rows"])), len(cx) - 1)
+            p["bbox"] = (min(p["bbox"][0], t["bbox"][0]), p["bbox"][1], max(p["bbox"][2], t["bbox"][2]), t["bbox"][3])
+            p["evidence"] = (p.get("evidence") or "") + "; summary rows below a double rule joined"
+            continue
+        out.append(t)
+    return out
+
+
+_NUMERIC = re.compile(r"^[-–+(]?[$€£]?\d[\d,.]*%?\)?$")
+
+
+def _absorb_trailing_rows(tables, words, body):
+    """A last row the ruling detector left out (closed by its own rule) that lines up with the table's value
+    columns: 'Average (Unit Tests)  0.76 0.60 ...' under a ruled table."""
+    for t in tables:
+        cx = t.get("col_x")
+        if not cx or len(cx) < 4 or not t.get("rows"):
+            continue
+        x0, y0, x1, y1 = t["bbox"]
+        for _ in range(3):
+            band = [w for w in words if y1 - 1 <= w[1] <= y1 + 1.6 * body and w[0] >= x0 - 2 and w[2] <= x1 + 2]
+            if not band:
+                break
+            top = min(w[1] for w in band)
+            line = sorted([w for w in band if w[1] <= top + 0.5 * body], key=lambda w: w[0])
+            nums = [w for w in line if _NUMERIC.match(w[4])]
+            if len(nums) < 2 or len(nums) < 0.5 * len(line):
+                break
+            n_cols = len(cx) - 1
+
+            def col_of(w):
+                mid = (w[0] + w[2]) / 2
+                return max([k for k in range(n_cols) if cx[k] <= mid] or [0])
+            by_col = {}
+            label = [w for w in line if w not in nums and w[0] < min(n[0] for n in nums)]
+            for w in line:
+                if w in label:
+                    continue
+                by_col.setdefault(col_of(w), []).append(w[4])
+            if len(by_col) < 2 or len(set(by_col)) != len(by_col):
+                break
+            r = t.get("n_rows") or len(t["rows"])
+            cells = list(_cells_of(t))
+            first = min(by_col)
+            if label:
+                cells.append(dict(r=r, c=0, rs=1, cs=max(1, first), text=" ".join(w[4] for w in label)))
+            else:
+                cells += [dict(r=r, c=k, rs=1, cs=1, text="") for k in range(first)]
+            for k in range(first, n_cols):
+                cells.append(dict(r=r, c=k, rs=1, cs=1, text=" ".join(by_col.get(k, []))))
+            _set_cells(t, cells, r + 1, n_cols)
+            y1 = max(w[3] for w in line)
+            t["bbox"] = (x0, y0, x1, y1)
+            t["evidence"] = (t.get("evidence") or "") + "; trailing row aligned with the columns"
+
+
 def _absorb_spanning_headers(tables, words, body):
     """A short heading set just above a table's value columns ("Year Ended" over three date columns)
     is the table's top header row, spanning those columns. Returns the tables that changed."""
@@ -530,20 +621,57 @@ def _absorb_spanning_headers(tables, words, body):
             continue
         n = len(cx) - 1
         centers = [(cx[k] + cx[k + 1]) / 2 for k in range(n)]
-        lx0, lx1 = line[0][0], line[-1][2]
-        cov = [k for k in range(1, n) if lx0 - 0.6 * (cx[k + 1] - cx[k]) <= centers[k] <= lx1 + 0.6 * (cx[k + 1] - cx[k])]
-        data_mid = (cx[1] + cx[-1]) / 2
-        if len(cov) <= 1 and abs((lx0 + lx1) / 2 - data_mid) <= 0.15 * (cx[-1] - cx[1]):
-            cov = list(range(1, n))                 # centred over all value columns: spans them all
-        if not cov:
-            continue
-        c0, cs = cov[0], cov[-1] - cov[0] + 1
+        # several headings on one line ("ReACT   Plan+Execute   Hypothesizer"), each over its own column group
+        groups = [[line[0]]]
+        for w in line[1:]:
+            if w[0] - groups[-1][-1][2] > 2.5 * body:
+                groups.append([w])
+            else:
+                groups[-1].append(w)
+        spans = []                                   # (first column, last column, text)
+        if len(groups) >= 2:
+            owner = {}
+            for k in range(1, n):
+                best = None
+                for gi, g in enumerate(groups):
+                    gx0, gx1 = g[0][0], g[-1][2]
+                    wcol = cx[k + 1] - cx[k]
+                    if gx0 - 0.6 * wcol <= centers[k] <= gx1 + 0.6 * wcol:
+                        d = abs(centers[k] - (gx0 + gx1) / 2)
+                        if best is None or d < best[0]:
+                            best = (d, gi)
+                if best:
+                    owner[k] = best[1]
+            # each heading spans its columns plus the unlabelled columns up to the next heading's group
+            for gi, g in enumerate(groups):
+                ks = sorted(k for k, o in owner.items() if o == gi)
+                if ks:
+                    spans.append((ks[0], ks[-1], " ".join(w[4] for w in g)))
+            spans.sort()
+            if len(spans) != len(groups) or any(a[1] >= b[0] for a, b in zip(spans, spans[1:])):
+                spans = []
+            elif all(a[1] - a[0] == 0 for a in spans):
+                spans = []                           # one column each: an ordinary header row, not spanning headings
+        if not spans:
+            lx0, lx1 = line[0][0], line[-1][2]
+            cov = [k for k in range(1, n) if lx0 - 0.6 * (cx[k + 1] - cx[k]) <= centers[k] <= lx1 + 0.6 * (cx[k + 1] - cx[k])]
+            data_mid = (cx[1] + cx[-1]) / 2
+            if len(cov) <= 1 and abs((lx0 + lx1) / 2 - data_mid) <= 0.15 * (cx[-1] - cx[1]):
+                cov = list(range(1, n))                 # centred over all value columns: spans them all
+            if not cov:
+                continue
+            spans = [(cov[0], cov[-1], text)]
         cells = t.get("cells") or [dict(r=i, c=j, rs=1, cs=1, text=x) for i, r in enumerate(t["rows"]) for j, x in enumerate(r)]
         cells = [dict(c, r=c["r"] + 1) for c in cells]
-        head = [dict(r=0, c=k, rs=1, cs=1, text="") for k in range(c0)] + [dict(r=0, c=c0, rs=1, cs=cs, text=text)]
-        head += [dict(r=0, c=k, rs=1, cs=1, text="") for k in range(c0 + cs, n)]
+        head, row0, k = [], [""] * n, 0
+        for a0, a1, txt in spans:
+            head += [dict(r=0, c=j, rs=1, cs=1, text="") for j in range(k, a0)]
+            head.append(dict(r=0, c=a0, rs=1, cs=a1 - a0 + 1, text=txt))
+            row0[a0] = txt
+            k = a1 + 1
+        head += [dict(r=0, c=j, rs=1, cs=1, text="") for j in range(k, n)]
         t["cells"] = head + cells
-        t["rows"] = [["" if k != c0 else text for k in range(n)]] + t["rows"]
+        t["rows"] = [row0] + t["rows"]
         t["n_rows"] = len(t["rows"])
         t["header_rows"] = t.get("header_rows", 1) + 1
         t["bbox"] = (x0, min(w[1] for w in line), x1, t["bbox"][3])
@@ -638,6 +766,17 @@ def apply_ai_reading(b, d, model_name=None):
     return b
 
 
+def _ocr_junk(text, conf):
+    """Tesseract reading texture in a photo: 'e', 'qu', 'Eee', 'FA,'. Numbers (axis ticks) and real words stay."""
+    t = (text or "").strip()
+    if not t or any(c.isdigit() for c in t) or any(ord(c) >= 0x2E80 for c in t):
+        return not t
+    longest = max((len(r) for r in re.findall(r"[^\W\d_]+", t)), default=0)
+    if longest >= 4 or (longest == 3 and conf >= 0.8):
+        return False
+    return conf < 0.9
+
+
 def figure_block(page, n, f, cfg, state, S):
     """Figure / image region: keep the region, attach text found inside it (text layer first,
     OCR for raster images), and optionally a vision description."""
@@ -671,7 +810,8 @@ def figure_block(page, n, f, cfg, state, S):
                 for d in items:
                     x0, y0, x1, y1 = d["bbox"]
                     e = dict(text=d["text"], bbox=[round(bb[0] + x0 * k), round(bb[1] + y0 * k), round(bb[0] + x1 * k), round(bb[1] + y1 * k)],
-                             confidence=d["confidence"], source="ocr", in_markdown=d["keep"], row=d.get("row", 0))
+                             confidence=d["confidence"], source="ocr", in_markdown=d["keep"] and not _ocr_junk(d["text"], d["confidence"]),
+                             row=d.get("row", 0))
                     if d.get("ocr_raw"):
                         e.update(ocr_raw=d["ocr_raw"], correction=d["corrected"])
                     detected.append(e)
@@ -832,7 +972,28 @@ def scanned_page_blocks(img_rgb, n, ws, info, k, cfg, state, vocab, page_h_px, p
             _insert_by_position(blocks, _pending_block(n, r, "ink"))
             continue
         blocks = _apply_ink_region(blocks, view_img, r, n, cfg, state)
-    return _merge_handwritten_page(blocks, img_rgb, n)
+    return _drop_echoed_labels(_merge_handwritten_page(blocks, img_rgb, n))
+
+
+def _drop_echoed_labels(blocks):
+    """Text read inside a picture region that repeats an overlapping paragraph (the same title read twice,
+    once with broken spacing) is left out of the Markdown; the paragraph already carries it."""
+    squash = lambda t: re.sub(r"\W+", "", (t or "").lower())
+    texts = [(b["bbox"], squash(b.get("content"))) for b in blocks if b["type"] in ("paragraph", "heading") and b.get("content")]
+    for b in blocks:
+        if b["type"] != "figure" or not b.get("detected_text"):
+            continue
+        changed = False
+        for d in b["detected_text"]:
+            q = squash(d.get("text"))
+            if d.get("in_markdown", True) and len(q) >= 4 and any(q in t and overlap_frac(d["bbox"], bb) > 0.3 for bb, t in texts):
+                d["in_markdown"], changed = False, True
+        if changed:
+            kept = [d["text"] for d in b["detected_text"] if d.get("in_markdown", True)]
+            b["ocr_text"] = "\n".join(kept) or None
+            if b.get("content") is not None and b.get("extractor") == "figure_ocr":
+                b["content"] = b["ocr_text"]
+    return blocks
 
 
 def _pending_block(n, bbox, kind, fkind=None):
@@ -962,6 +1123,7 @@ def _page_job(kind, src, i, cfg, state, vocab):
         layer = page.get_text("text") if a["ocr_layer"] else None
         meta.update(kind="scanned", flags=dict(text_layer=a["has_text_layer"], scanned=True), ocr_dpi=dpi)
         return dict(done=False, n=n, gray=gray, view=view, k=k, meta=meta, ocr_layer_text=layer,
+                    text_words=_visible_text_words(page, a, dpi / 72.0),
                     info=dict(width=W, height=H, norm_text="", text_quality=1.0, clip_text=None))
     # single image input
     img = src
@@ -1022,8 +1184,46 @@ def page_info_for(page, S, a):
                 text_quality=a["text_quality"], clip_text=clip_text)
 
 
+def _visible_text_words(page, a, f):
+    """Real (visible, well-encoded) text drawn over a page-sized picture - a poster or cover whose title is
+    text over a background photo. OCR still reads the picture; these words replace OCR's guesses where they
+    overlap, because the text layer is exact."""
+    if a.get("ocr_layer") or not a.get("chars") or a.get("text_quality", 0) < 0.95:
+        return None
+    try:
+        tr = page.get_texttrace()
+        tot = sum(len(t["chars"]) for t in tr) or 1
+        if sum(len(t["chars"]) for t in tr if t.get("type") == 0 and t.get("opacity", 1) > 0.5) / tot < 0.9:
+            return None
+        ws = page.get_text("words", flags=pdf_parser.TEXT_FLAGS)
+    except Exception:
+        return None
+    return [dict(text=w[4], box=tuple(round(v * f) for v in w[:4]), conf=0.99, h=round((w[3] - w[1]) * f),
+                 key=("text_layer", w[5]), line=("text_layer", w[5], w[6])) for w in ws if w[4].strip()]
+
+
+def _with_text_layer(ws, tws):
+    if not tws:
+        return ws
+
+    def inside(o, t):
+        cx, cy = (o[0] + o[2]) / 2, (o[1] + o[3]) / 2
+        mx, my = 0.15 * (t[2] - t[0]), 0.25 * (t[3] - t[1])
+        if t[0] - mx <= cx <= t[2] + mx and t[1] - my <= cy <= t[3] + my:
+            return True
+        ix = max(0, min(o[2], t[2]) - max(o[0], t[0])) * max(0, min(o[3], t[3]) - max(o[1], t[1]))
+        return ix > 0.3 * max(1, (o[2] - o[0]) * (o[3] - o[1]))
+    keep = [w for w in ws if not any(inside(w["box"], t["box"]) for t in tws)]
+    out = list(keep)
+    for t in tws:
+        later = [w.get("order", 0) for w in keep if w["box"][1] > t["box"][1]]
+        out.append(dict(t, order=(min(later) - 0.5) if later else 10 ** 6 + t["box"][1]))
+    return out
+
+
 def _finish_scanned(job, cfg, state, vocab):
     ws, info, _ = _ocr_image(job["gray"], cfg)
+    ws = _with_text_layer(ws, job.get("text_words"))
     meta = job["meta"]
     meta["preprocessing"] = {k: v for k, v in info.items() if k != "ocr_attempts"}
     meta["ocr"] = info.get("ocr_attempts")
