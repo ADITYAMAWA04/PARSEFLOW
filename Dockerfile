@@ -26,7 +26,6 @@ ENV PARSEFLOW_DATA_DIR=/data \
     PARSEFLOW_OFFICE=builtin
 RUN useradd --create-home parseflow && mkdir -p /data && chown parseflow /data
 USER parseflow
-VOLUME ["/data"]
 EXPOSE 8000
 WORKDIR /app/backend
 # --proxy-headers: behind the host's HTTPS proxy, cookies are then marked Secure correctly
