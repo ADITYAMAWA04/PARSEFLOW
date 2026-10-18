@@ -21,9 +21,14 @@ questions about the document with citations to those blocks.
 >
 > See [docs/RESULTS.md](docs/RESULTS.md) for every number and how it was measured.
 
----
-
 For the internship submission steps (one command, official score, latency), see [SUBMISSION.md](SUBMISSION.md).
+
+## 🌐 Live Deployments
+
+* **Railway (Primary, Always-on):** [https://parseflow-production-b5e7.up.railway.app](https://parseflow-production-b5e7.up.railway.app)
+  * Health check: [https://parseflow-production-b5e7.up.railway.app/api/health](https://parseflow-production-b5e7.up.railway.app/api/health)
+* **Render (Backup):** [https://parseflow-sy1o.onrender.com](https://parseflow-sy1o.onrender.com)
+  * Health check: [https://parseflow-sy1o.onrender.com/api/health](https://parseflow-sy1o.onrender.com/api/health)
 
 ## Quick start
 

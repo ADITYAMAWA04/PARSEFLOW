@@ -1,5 +1,17 @@
 # Internship submission: how to reproduce
 
+## 0. Try it live (30 seconds)
+
+* **Railway Deployment:** [https://parseflow-production-b5e7.up.railway.app](https://parseflow-production-b5e7.up.railway.app) (Always-on, no cold start)
+  * Health check: `https://parseflow-production-b5e7.up.railway.app/api/health`
+* **Render Deployment:** [https://parseflow-sy1o.onrender.com](https://parseflow-sy1o.onrender.com)
+  * Health check: `https://parseflow-sy1o.onrender.com/api/health`
+* **Or run it yourself in one command (needs Docker):**
+  ```bash
+  docker build -t parseflow . && docker run -p 8000:8000 parseflow
+  # open http://localhost:8000
+  ```
+
 Everything below runs offline on a laptop CPU. No API key is needed.
 
 ## 1. Install (once)

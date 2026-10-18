@@ -54,7 +54,15 @@ its JSON and Markdown; Neon's free tier holds 0.5 GB. Guest documents are remove
    (their documents are deleted after `GUEST_RETENTION_HOURS`, default 24), or create an account
    to keep their documents.
 
-### Any other host (Railway, Fly.io, a VPS)
+### Railway (step by step)
+
+1. Connect the GitHub repository `https://github.com/ADITYAMAWA04/PARSEFLOW` on [railway.com](https://railway.com).
+2. Railway detects `Dockerfile` and `railway.json` automatically, building the full container with Tesseract, Poppler, and headless LibreOffice.
+3. In **Settings → Networking**, generate a domain or set the port to `8000`.
+4. (Optional) In **Variables**, add `DATABASE_URL` (e.g. from Neon PostgreSQL) or add a persistent Railway Volume.
+5. Live link: [https://parseflow-production-b5e7.up.railway.app](https://parseflow-production-b5e7.up.railway.app)
+
+### Any other host (Fly.io, VPS, Docker)
 
 ```bash
 docker build -t parseflow .                                   # add --build-arg WITH_LIBREOFFICE=0 for a smaller image
