@@ -22,7 +22,6 @@ dependencies = [
 [project.optional-dependencies]
 server = ["uvicorn[standard]>=0.30"]
 dev = ["pytest>=8", "reportlab>=4"]
-bench = ["olmocr[bench] @ git+https://github.com/allenai/olmocr.git"]
 
 [tool.vercel]
 entrypoint = "backend.app:app"
