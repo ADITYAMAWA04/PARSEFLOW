@@ -1,5 +1,16 @@
 # Measured results
 
+## Current numbers (v0.8.2) at a glance
+
+| | value | what it is |
+|---|---|---|
+| olmOCR-Bench **full** set (1,403 PDFs) | **not measured yet** | the score that counts; run `bench/run_benchmark.py` (SUBMISSION.md) |
+| olmOCR-Bench **sample** (20 PDFs, 99 tests, `dataset.jsonl`) | **78.8 %** (78/99) | development set; overstates the full benchmark |
+| sample by test type | table 18/20, order 12/13, absent 24/24, math 12/12, present 15/30 | |
+| latency, sample, 1 worker | **median 0.35 s/page** (p25 0.19, p75 1.03, p90 3.2, mean 1.17) | 2-vCPU cloud machine, not the 8-core laptop of the target |
+
+The older tables further down are kept as history; each says which version it describes.
+
 Everything on this page was measured, not estimated. Where a number comes from a partial or
 synthetic evaluation it says so. **No full olmOCR-Bench score has been measured yet, so the 80 %
 target is not shown to be met.** The offline engine scores 78.8 % on the 20-PDF sample (v0.7.0). The `vlm`
@@ -267,3 +278,24 @@ Formats: DOCX, XLSX, PPTX, CSV, TXT (UTF-8 and UTF-16), MD, HTML, JSON, RTF, mul
 and BMP are converted and read in `tests/test_formats_speed.py` and in a browser test. DOCX, PPTX and
 RTF were also converted through LibreOffice 24.2 here. The Dockerfile could not be built (no Docker
 daemon in the build environment).
+
+## v0.8.2: faster digital pages
+
+Profiling on the sample (one worker process) found three costs that had nothing to do with reading:
+
+* Verification re-read the PDF text inside each block with `page.get_textbox()`, which walks every
+  glyph on the page once per block. It is now one word list per page, filtered per block. This was
+  about 60 % of the time on digital pages.
+* `find_tables` (about 0.5 s a page) ran on every page. It now runs only when the page has at least
+  three horizontal rules or cell rectangles; without them it finds nothing.
+* Figure OCR ran a second pass (box and axis lines removed) on every picture with lines. The second
+  pass now runs only when the first reading is weak (fewer than 3 labels or mean confidence below
+  0.8).
+
+The sample score is unchanged at 78.8 %, with the same failing tests. The machine used today is
+slower than the earlier one: the unchanged v0.5.1 code takes the same time per page as v0.8.1 here.
+
+| sample, 1 worker, same machine | median s/page | mean |
+|---|---|---|
+| v0.8.1 | 0.781 | 1.40 |
+| v0.8.2 | **0.350** | 1.17 |

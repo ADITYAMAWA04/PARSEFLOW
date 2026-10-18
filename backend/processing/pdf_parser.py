@@ -234,10 +234,37 @@ def words(page):
     return [(w[0], w[1], w[2], w[3], normalize_ligatures(w[4])) for w in page.get_text("words", flags=TEXT_FLAGS)]
 
 
+def _may_have_ruled_table(page):
+    """Cheap pre-check: a ruled table needs at least 3 horizontal rules (booktabs: top, mid, bottom)
+    or a box drawn as rectangles. Counts thin horizontal strokes and filled cell rectangles."""
+    try:
+        paths = page.get_cdrawings()
+    except Exception:
+        return True
+    horiz = rects = 0
+    for p in paths:
+        for it in p.get("items", ()):
+            kind = it[0]
+            if kind == "l":
+                a, b = it[1], it[2]
+                if abs(a[1] - b[1]) < 1.5 and abs(a[0] - b[0]) > 15:
+                    horiz += 1
+            elif kind == "re":
+                r = it[1]
+                w, h = abs(r[2] - r[0]), abs(r[3] - r[1])
+                if (h < 2.5 and w > 15) or (w > 15 and h > 6):
+                    rects += 1
+            if horiz + rects >= 3:
+                return True
+    return False
+
+
 def ruled_tables(page):
     """PyMuPDF find_tables (ruling-line strategy), with merged-cell spans recovered."""
     from .tables import spans_from_grid
     out = []
+    if not _may_have_ruled_table(page):
+        return out                      # find_tables costs ~0.5 s a page; without ruling lines it finds nothing
     try:
         found = page.find_tables()
     except Exception:

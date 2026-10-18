@@ -278,8 +278,25 @@ def _has_ruling(page):
         return True
 
 
+def _cache_drawings(page):
+    """page.get_drawings() is slow (pure Python over every path) and figures, ruling detection,
+    maths and find_tables each called it: read it once per page. Callers only read the result."""
+    if getattr(page, "_pf_drawings_cached", False):
+        return
+    orig, memo = page.get_drawings, {}
+
+    def cached(*a, **k):
+        key = (a, tuple(sorted(k.items())))
+        if key not in memo:
+            memo[key] = orig(*a, **k)
+        return list(memo[key])
+    page.get_drawings = cached
+    page._pf_drawings_cached = True
+
+
 def digital_page(page, n, cfg, state, vocab, S, ocr_layer=False):
     """Extract one page that has a usable text layer. Returns (blocks, meta)."""
+    _cache_drawings(page)
     W, H = page.rect.width, page.rect.height
     lines = pdf_parser.lines_from_words(page) if ocr_layer else pdf_parser.lines(page)
     for l in lines:
@@ -985,12 +1002,22 @@ def ocr_dpi_for(page, cfg):
 def page_info_for(page, S, a):
     txt = page.get_text("text", flags=pdf_parser.TEXT_FLAGS)
 
+    # Independent re-read: MuPDF's word list (a different extraction path from the line/span parse the
+    # blocks come from), read ONCE per page; page.get_textbox() per block re-walks every glyph on the
+    # page for each block and was ~60 % of the time on digital pages.
+    try:
+        words = page.get_text("words", flags=pdf_parser.TEXT_FLAGS)
+    except Exception:
+        words = None
+
     def clip_text(bb_px):
-        r = pymupdf.Rect(*(v / S for v in bb_px)) + (-1, -1, 1, 1)
-        try:
-            return page.get_textbox(r)
-        except Exception:
+        if words is None:
             return None
+        x0, y0, x1, y1 = (v / S for v in bb_px)
+        x0, y0, x1, y1 = x0 - 1, y0 - 1, x1 + 1, y1 + 1
+        inside = [w for w in words if x0 <= (w[0] + w[2]) / 2 <= x1 and y0 <= (w[1] + w[3]) / 2 <= y1]
+        inside.sort(key=lambda w: (w[5], w[6], w[7]))          # block, line, word order
+        return " ".join(w[4] for w in inside)
     return dict(width=page.rect.width * S, height=page.rect.height * S, norm_text=re.sub(r"[^a-z0-9]+", "", txt.lower()),
                 text_quality=a["text_quality"], clip_text=clip_text)
 

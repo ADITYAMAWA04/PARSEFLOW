@@ -209,7 +209,9 @@ def image_text(gray, timeout=0, min_conf=0.5):
     first = ocr.region_text(up(gray), psm=11, min_conf=min_conf, timeout=timeout)
     passes = ["psm11"]
     items = first
-    if has_h or has_v:
+    confs = [d["confidence"] for d in first]
+    weak = len(first) < 3 or (sum(confs) / len(confs)) < 0.8
+    if (has_h or has_v) and weak:   # lines in the picture and a weak first reading: read again without the lines
         second = ocr.region_text(up(stripped), psm=11, min_conf=min_conf, timeout=timeout)
         items = merge_passes(first, second)
         passes.append("psm11_lines_removed")
