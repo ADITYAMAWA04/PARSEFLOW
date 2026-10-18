@@ -1452,6 +1452,8 @@ def enrich_visuals(path, filename, out_dir, prog=None, cfg=None, lock=None):
 
     def view_of(n):
         if n not in views:
+            if len(views) >= 2:
+                views.clear()
             if kind == "pdf":
                 with mlock:
                     views[n] = _render(src[n - 1], pages[n].get("scale") or cfg.render_scale)
