@@ -22,7 +22,8 @@ COPY .env.example ./.env.example
 ENV PARSEFLOW_DATA_DIR=/data \
     PYTHONUNBUFFERED=1 \
     OMP_THREAD_LIMIT=1 \
-    JOB_WORKERS=1
+    JOB_WORKERS=1 \
+    PARSEFLOW_OFFICE=builtin
 RUN useradd --create-home parseflow && mkdir -p /data && chown parseflow /data
 USER parseflow
 VOLUME ["/data"]

@@ -98,7 +98,8 @@ def to_pipeline_input(src, filename, out_dir):
         _html_to_pdf(html, pdf, archive=archive, pages=per_page)
         return str(pdf), "builtin"
     lo = libreoffice()
-    if lo and os.getenv("PARSEFLOW_OFFICE", "libreoffice") != "builtin":
+    office_mode = os.getenv("PARSEFLOW_OFFICE", "builtin" if (os.getenv("RENDER") or os.getenv("PARSEFLOW_LOW_MEM")) else "libreoffice")
+    if lo and office_mode != "builtin":
         try:
             _libreoffice(lo, src, ext, pdf)
             return str(pdf), "libreoffice"
