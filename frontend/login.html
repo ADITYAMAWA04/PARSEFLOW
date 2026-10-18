@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Log in · ParseFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=0.8.1"></head>
+<body class="authpage"><div class="auth-wrap">
+<nav class="nav"><a class="logo" href="/" style="text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M7 2.8h7.5l4.2 4.2v14.2H7z"/><path d="M14.5 2.8V7h4.2"/><path d="M10 11h5.5M10 14.5h5.5M10 18h3"/><path d="M4 9.5v10" stroke="var(--ac)" stroke-width="2" stroke-linecap="round"/></svg>ParseFlow</a></nav>
+<main class="auth-main"><div class="auth-card" id="card">
+ <div class="auth-tabs" role="tablist">
+  <button role="tab" id="t-login" class="on" onclick="mode('login')">Log in</button>
+  <button role="tab" id="t-register" onclick="mode('register')">Create account</button>
+ </div>
+ <p class="auth-sub" id="sub">Log in to see your saved documents on any computer.</p>
+ <form id="f" method="post" action="javascript:void(0)" onsubmit="submitAuth(event)" autocomplete="on">
+  <label>Username<input id="u" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required minlength="3" maxlength="32"></label>
+  <label>Password<input id="p" name="password" type="password" autocomplete="current-password" required minlength="8" maxlength="200"></label>
+  <div id="p2w" hidden><label>Repeat password<input id="p2" type="password" autocomplete="new-password" maxlength="200"></label></div>
+  <div id="msg" class="auth-msg" role="alert"></div>
+  <button class="btn pri auth-go" id="gobtn" type="submit">Log in</button>
+ </form>
+ <div class="auth-or">or</div>
+ <a class="auth-skip" href="/">Continue without an account</a>
+ <p class="auth-note" id="note">Without an account your documents are kept for 24 hours, in this browser only. With an account they are saved until you delete them, and only you can open them. Documents you converted in this browser before logging in move into your account.</p>
+</div></main></div>
+<script>
+const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let M = new URLSearchParams(location.search).get('mode') === 'register' ? 'register' : 'login';
+function mode(m) {
+  M = m;
+  $('t-login').classList.toggle('on', m === 'login'); $('t-register').classList.toggle('on', m === 'register');
+  $('p2w').hidden = m !== 'register';
+  $('p').autocomplete = m === 'register' ? 'new-password' : 'current-password';
+  $('gobtn').textContent = m === 'register' ? 'Create account' : 'Log in';
+  $('sub').textContent = m === 'register' ? 'Choose a username and a password (at least 8 characters). No email needed.' : 'Log in to see your saved documents on any computer.';
+  $('msg').textContent = '';
+}
+function submitAuth(e) {
+  e.preventDefault();
+  const u = $('u').value.trim(), p = $('p').value;
+  if (M === 'register' && p !== $('p2').value) { $('msg').textContent = 'The two passwords are not the same.'; return; }
+  $('gobtn').disabled = true; $('msg').textContent = '';
+  fetch('/api/auth/' + M, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) })
+    .then(r => r.json()).then(j => {
+      if (j.error) { $('msg').textContent = j.error.message; return; }
+      location.href = '/?welcome=1';
+    }).catch(() => { $('msg').textContent = 'The ParseFlow server could not be reached.'; })
+    .finally(() => { $('gobtn').disabled = false; });
+}
+fetch('/api/me').then(r => r.json()).then(me => {
+  if (!me.accounts) { $('card').innerHTML = '<p class="auth-sub">Accounts are not available on this deployment (it has no database). Your documents open normally without an account.</p><a class="auth-skip" href="/">Back to ParseFlow</a>'; return; }
+  if (me.guest_hours <= 0) $('note').textContent = 'With an account your documents are saved until you delete them, and only you can open them.';
+  if (me.signed_in) {
+    $('card').innerHTML = `<p class="auth-sub">You are logged in as <b>${esc(me.user.username)}</b>.</p><a class="auth-skip" href="/">Go to ParseFlow</a><div class="auth-or">or</div><button class="btn auth-go" onclick="fetch('/api/auth/logout',{method:'POST'}).then(()=>location.reload())">Log out</button>`;
+  }
+}).catch(() => {});
+mode(M);
+</script></body></html>

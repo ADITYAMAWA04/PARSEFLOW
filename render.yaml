@@ -1,0 +1,22 @@
+# Render.com Blueprint: New > Blueprint > pick this repository. Creates one web service built from the
+# Dockerfile, with a persistent disk for documents and accounts. (Disks need a paid instance type;
+# on the free type everything is lost on every restart.)
+services:
+  - type: web
+    name: parseflow
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    disk:
+      name: parseflow-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: PARSEFLOW_DATA_DIR
+        value: /data
+      - key: GUEST_RETENTION_HOURS
+        value: "24"
+      - key: MAX_UPLOAD_MB
+        value: "100"
+      - key: AI_API_KEY          # optional: Gemini / Groq / Claude / OpenAI key for Ask and image reading
+        sync: false
