@@ -1,7 +1,6 @@
 # ParseFlow
 
-**ParseFlow** is an evidence-preserving document-intelligence system developed by **Team DEADLOCK**
-for the **DQCL ParseAnything** problem statement (DataQuest 3.0) further taken by Aditya Mawa.
+**ParseFlow** is an evidence-preserving document-intelligence system 
 
 It turns PDFs and images into Markdown plus a **Digital Twin** (JSON in which every extracted block
 keeps its page, bounding box, extractor, confidence and verification evidence), and answers
@@ -249,9 +248,5 @@ More: [docs/AUDIT.md](docs/AUDIT.md) (original problems), [docs/RESULTS.md](docs
 [docs/VERIFICATION.md](docs/VERIFICATION.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---
-
-## Team
-
-**Team DEADLOCK** · Project: ParseFlow · Problem statement: DQCL ParseAnything · Event: DataQuest 3.0
 
 Repository: https://github.com/ADITYAMAWA04/PARSERFLOW
