@@ -130,7 +130,7 @@ def health():
                 llm=dict(configured=lc["configured"], provider=lc["provider"], model=llm.public(lc)["model"]),
                 ai_settings_editable=not SERVERLESS,
                 mode="serverless" if SERVERLESS else "worker",
-                history=not SERVERLESS, formats=formats.describe(),
+                history=True, formats=formats.describe(),
                 high_accuracy_ocr=dict(vlm_ocr.public(), in_app=os.getenv("HIGH_ACCURACY_OCR", "1") != "0"),
                 limits=dict(max_upload_mb=SETTINGS.max_upload_mb, max_pages=SETTINGS.max_pages or None,
                             legacy_MAX_PAGES_ignored=SETTINGS.legacy_max_pages_ignored,
@@ -601,8 +601,6 @@ def _history_row(r):
 
 @app.get("/api/history")
 def history_list(request: Request):
-    if SERVERLESS:
-        return dict(enabled=False, documents=[])
     rows = [_history_row(r) for r in STORE.docs(_owner(request))]
     return dict(enabled=True, signed_in=bool(request.state.user), guest_hours=GUEST_HOURS,
                 documents=[r for r in rows if r["exists"]])
@@ -641,13 +639,11 @@ async def _creds(request):
 def me(request: Request):
     u = request.state.user
     return dict(signed_in=bool(u), user=dict(username=u["username"]) if u else None,
-                accounts=not SERVERLESS, guest_hours=GUEST_HOURS)
+                accounts=True, guest_hours=GUEST_HOURS)
 
 
 @app.post("/api/auth/register")
 async def register(request: Request):
-    if SERVERLESS:
-        return err("PF-403", "Not Available", "Accounts need a server with a database (see docs/DEPLOYMENT.md).", 403)
     username, password = await _creds(request)
     ip = request.client.host if request.client else "?"
     if _too_many("reg:" + ip):
@@ -662,8 +658,6 @@ async def register(request: Request):
 
 @app.post("/api/auth/login")
 async def login(request: Request):
-    if SERVERLESS:
-        return err("PF-403", "Not Available", "Accounts need a server with a database (see docs/DEPLOYMENT.md).", 403)
     username, password = await _creds(request)
     ip = request.client.host if request.client else "?"
     key = f"login:{ip}:{username.lower()}"
